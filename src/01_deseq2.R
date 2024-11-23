@@ -100,7 +100,7 @@ disease <- counts_matrix |>
 
 
 
-## Create a DESeq data set using overall survival (OS) for the design
+## Create a DESeq data set using health status (status) for the design
 dds <- DESeqDataSetFromMatrix(countData = counts_matrix,
                               colData = disease,
                               design = ~ status)
