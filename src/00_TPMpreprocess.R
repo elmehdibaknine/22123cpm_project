@@ -1,27 +1,5 @@
+# Load libraries
 library(tidyverse)
-
-### Subsetting using deeploc results
-cell_membrane_proteins <- read_tsv(file = ("data/raw/cell_membrane_proteins_enst.txt"))
-
-tcga_counts <- read_tsv(file = ("data/raw/filtered_counts_TCGA.gz"))
-enst_list <- cell_membrane_proteins |> select(enst)
-
-tcga_counts_m <- tcga_counts |> 
-  mutate(sample_simple = str_remove(sample, "\\.\\d+")) 
-
-
-tcga_counts_subset <- tcga_counts_m |>
-  inner_join(, y = enst_list, by = c("sample_simple" = "enst"))
-
-### Removing rows with column sum below 10
-tcga_counts_subset_2 <- tcga_counts_subset |> 
-  rowwise() |>
-  filter(sum(c_across(where(is.numeric))) >= 10) |>
-  ungroup()
-
-### Writing file to disk
-tcga_counts_subset_2 |> write_tsv(file = "data/processed/tcga_counts_subset.tsv.gz")
-
 
 # Funtion reads tsv tpm file, get a input tpm_limit threshold, and 
 # nonTargetFilter for a threshold.
@@ -56,7 +34,7 @@ preProTPM <- preProcessTPM(pathToFile = "data/processed/tcga_counts_subset.tsv.g
                            nonTargetFilter = 0.6)
 
 # write out data-output from function.
-write_tsv(preProTPM, "data/processed/pre_processed_tpm.tsv.gz")
+#write_tsv(preProTPM, "data/processed/pre_processed_tpm.tsv.gz")
 
 # collect sample ids needs to subset all our datasets.
 sample_to_subset_gtex <- preProTPM |> 
