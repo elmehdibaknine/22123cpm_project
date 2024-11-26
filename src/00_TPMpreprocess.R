@@ -3,10 +3,8 @@ library(tidyverse)
 library(here)
 
 
-harmonizeGtex <- function(gtex_tpm_path, gtex_count_path) {
-  tpm_harmon_out <- "data/processed/GTEX_tpm_harmonized.tsv.gz"
-  count_harmon_out <- "data/processed/GTEX_counts_harmonized.tsv.gz"
-  if (file.exists(here(tpm_harmon_out)) && file.exists(here(count_harmon_out))) {
+harmonizeGtex <- function(gtex_tpm_path, gtex_count_path, tpm_harmon_out, count_harmon_out) {
+  if (file.exists(tpm_harmon_out) && file.exists(count_harmon_out)) {
     return()
   }
   
@@ -46,9 +44,45 @@ harmonizeGtex <- function(gtex_tpm_path, gtex_count_path) {
     select(any_of(tpm_samples)) |>
     filter(transcript %in% tpm_transcripts) |>
     rename(sample = transcript) |>
-    write_tsv(here(counts_harmon_out))
+    write_tsv(here(count_harmon_out))
   
   return()
+}
+
+revertToCounts <- function(log2CountData_path, out_path) {
+  if (file.exists(out_path)) {
+    return()
+  }
+  
+  log2countdata <- read_tsv(log2CountData_path)
+  
+  countdata <- log2countdata %>%
+    mutate(across(
+      where(is.numeric), 
+      ~ 2^(.x) - 1
+    )) |>
+    mutate(across(where(is.numeric), ~ ifelse(. < 0, 0, .)))
+  
+  countdata |>
+    write_tsv(out_path)
+}
+
+revertToTPM <- function(log2TPMData_path, out_path) {
+  if (file.exists(out_path)) {
+    return()
+  }
+  
+  log2TPMdata <- read_tsv(log2TPMData_path)
+  
+  countdata <- log2TPMdata %>%
+    mutate(across(
+      where(is.numeric), 
+      ~ 2^(.x) - 0.001
+    )) |>
+    mutate(across(where(is.numeric), ~ ifelse(. < 0, 0, .)))
+  
+  countdata |>
+    write_tsv(out_path)
 }
 
 # Funtion reads tsv tpm file, get a input tpm_limit threshold, and 
@@ -80,14 +114,14 @@ filterHealthyExpressed <- function(GtexTPM, TranscriptSubset, TPM_limit, nonTarg
   return(transcript_list_filtered)
 }
 
-filterDeeplocRowsums <- function(min_count_sum = 10) {
+filterDeeplocRowsums <- function(cell_mem_proteins_path, TCGA_counts_path, min_count_sum = 10) {
   ### Subsetting using deeploc results
-  cell_membrane_proteins <- read_tsv(file = (here("data/raw/cell_membrane_proteins_enst.txt")))
+  cell_membrane_proteins <- read_tsv(file = cell_mem_proteins_path)
   enst_list <- cell_membrane_proteins |> select(enst) |> pull()
   
   
   # Load TCGA
-  tcga_counts <- read_tsv(file = here("data/raw/filtered_counts_TCGA.gz")) |>
+  tcga_counts <- read_tsv(file = TCGA_counts_path) |>
     janitor::clean_names()
   
   tcga_counts <- tcga_counts |>
@@ -112,11 +146,15 @@ filterDeeplocRowsums <- function(min_count_sum = 10) {
 }
 
 subsetExpressionData <- function(transcript_subset, expression_data_path, out_path) {
+  if (file.exists(out_path)) {
+    return()
+  }
   expression_data <- read_tsv(expression_data_path) |>
     janitor::clean_names() |>
     mutate(transcript = str_remove(sample, "\\.\\d+"),
            .before = sample) |>
-    select(-sample)
+    select(-sample) |>
+    select(starts_with("transcript|gtex|tcga"))
   
   expression_data |>
     filter(transcript %in% transcript_subset) |>
@@ -124,21 +162,81 @@ subsetExpressionData <- function(transcript_subset, expression_data_path, out_pa
     
 }
 
+
+# RSEM TPM GTEX log2(x + 0.001)
+# RSEM COUNT GTEX log2(x + 1)
+# RSEM TPM TCGA log2(x + 0.001)
+# RSEM COUNT TCGA log2(x + 1)
+
+# Init values
+cell_mem_proteins_path <- here("data/raw/cell_membrane_proteins_enst.txt")
+gtex_tpm_raw <- here("data/raw/filtered_tpm_GTEx.gz")
+gtex_counts_raw <- here("data/raw/filtered_counts_GTEx.gz")
+tcga_tpm_raw <- here("data/raw/filtered_tpm_TCGA.gz")
+tcga_counts_raw <- here("data/raw/filtered_counts_TCGA.gz")
+
+gtex_tpm_harmon_out <- here("data/processed/GTEX_tpm_harmonized.tsv.gz")
+gtex_count_harmon_out <- here("data/processed/GTEX_counts_harmonized.tsv.gz")
+
+gtex_counts_corrected <- here("data/processed/GTEx_counts_corrected.tsv.gz")
+gtex_tpm_corrected <- here("data/processed/GTEx_tpm_corrected.tsv.gz")
+tcga_counts_corrected <- here("data/processed/TCGA_counts_corrected.tsv.gz")
+tcga_tpm_corrected <- here("data/processed/TCGA_tpm_corrected.tsv.gz")
+
+gtex_counts_processed <- here("data/processed/GTEx_counts_preprocessed.rds")
+gtex_tpm_processed <- here("data/processed/GTEx_tpm_preprocessed.rds")
+tcga_counts_processed <- here("data/processed/TCGA_counts_preprocessed.rds")
+tcga_tpm_processed <- here("data/processed/TCGA_tpm_preprocessed.rds")
+
 # Harmonize shit Gtex datasets
-harmonizeGtex(here("data/raw/filtered_tpm_GTEx.gz"), here("data/raw/filtered_counts_GTEx.gz"))
+harmonizeGtex(gtex_tpm_raw, 
+              gtex_counts_raw,
+              gtex_tpm_harmon_out,
+              gtex_count_harmon_out)
+
+# Get raw tpm matrices from log2(expr_val + 0.001) transformed state of files currently
+revertToTPM(gtex_tpm_harmon_out, gtex_tpm_corrected)
+revertToTPM(tcga_tpm_raw, tcga_tpm_corrected)
+
+# Get raw count matrices from log2(expr_val + 1) transformed state of files currently
+revertToCounts(gtex_count_harmon_out, gtex_counts_corrected)
+revertToCounts(tcga_counts_raw, tcga_counts_corrected)
 
 # Filter tcga based on deeploc subcellular location on membrane and row sums of transcript counts > 10
-deeploc_rowsums_transcript <- filterDeeplocRowsums()
+deeploc_rowsums_transcript <- filterDeeplocRowsums(cell_mem_proteins_path, tcga_counts_corrected)
 
 
 # Filter gtex based on earlier filter and expression levels in healthy populations
-final_transcripts <- filterHealthyExpressed(GtexTPM = "data/processed/GTEx_tpm_harmonized.tsv.gz",
+final_transcripts <- filterHealthyExpressed(GtexTPM = gtex_tpm_corrected,
                                             TranscriptSubset = deeploc_rowsums_transcript, 
                                             TPM_limit = 1,
                                             nonTargetFilter = 0.20)
 
-subsetExpressionData(final_transcripts, here("data/processed/GTEx_tpm_harmonized.tsv.gz"),    here("data/processed/GTEx_tpm_preprocessed.rds"))
-subsetExpressionData(final_transcripts, here("data/processed/GTEx_counts_harmonized.tsv.gz"), here("data/processed/GTEx_counts_preprocessed.rds"))
-subsetExpressionData(final_transcripts, here("data/raw/filtered_tpm_TCGA.gz"),                here("data/processed/TCGA_tpm_preprocessed.rds"))
-subsetExpressionData(final_transcripts, here("data/raw/filtered_counts_TCGA.gz"),             here("data/processed/TCGA_counts_preprocessed.rds"))
+# Write gtex
+subsetExpressionData(final_transcripts, gtex_counts_corrected, gtex_counts_processed)
+subsetExpressionData(final_transcripts, gtex_tpm_corrected,   gtex_tpm_processed)
 
+# Write TCGA
+subsetExpressionData(final_transcripts, tcga_counts_raw, tcga_counts_processed)
+subsetExpressionData(final_transcripts, tcga_tpm_corrected, tcga_tpm_processed)
+
+
+
+gtex_counts_d <- read_rds(gtex_counts_processed)
+gtex_tpm_d <- read_rds(gtex_tpm_processed)
+
+
+gtex_counts_d |>
+  select(-starts_with('gtex'))
+
+gtex_tpm_d |>
+  select(-starts_with('gtex'))
+
+tcga_counts_d <- read_rds(tcga_counts_processed)
+tcga_tpm_d <- read_rds(tcga_tpm_processed)
+
+tcga_counts_d |>
+  select(-starts_with('tcga'))
+
+tcga_tpm_d |>
+  select(-starts_with('tcga'))
