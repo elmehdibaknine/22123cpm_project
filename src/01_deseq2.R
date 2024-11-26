@@ -10,32 +10,25 @@ library(tidyverse)
 library(DESeq2)
 
 # load data
-brca_data <- read.csv("data/raw/csv")
-gtex_data <- read.csv("data/raw/csv2")
-
-### test ###
-load("/home/projects/22123/ex3.Rdata")
-brca_long <- COAD_counts
+tcga_counts <- read_rds(here("data/processed/TCGA_counts_preprocessed.rds"))
+gtex_counts <- read_rds(here("data/processed/GTEx_counts_preprocessed.rds"))
 
 #### IF NEEDED ####
 # Assume `data` is your matrix with genes as rows and samples as columns
-# brca_long <- brca_data %>%
-#   rownames_to_column(var = "Gene") %>%  # Convert row names to a column
-#   pivot_longer(-Gene, names_to = "Sample", values_to = "Expression")
-
-#### IF NOT ####
-brca_long <- brca_data
+tcga_long <- tcga_counts %>%
+  pivot_longer(-transcript, names_to = "sample", values_to = "count")
 
 # Summarize maximum expression for each gene
-brca_gene_summary <- brca_long %>%
-  group_by(gene) %>%
+tcga_gene_summary <- tcga_long %>%
+  group_by(sample) %>%
   summarise(MaxExpression = max(count))
 
 
 # Visualize maximum gene value across sample distribution
-max_plot <- brca_gene_summary %>%
-  ggplot(aes(x = "", y = log10(MaxExpression + 1))) +
+max_plot <- tcga_gene_summary %>%
+  ggplot(aes(x = "", y = MaxExpression)) +
   geom_violin(fill = "blue", alpha = 0.5) +
+  # geom_hline(yintercept = log10( + 1)) +
   # geom_jitter(width = 0.2, alpha = 0.5, color = "black") +  # Add jittered points
   theme_minimal() +
   labs(title = "Violin Plot of Max Gene Counts with Points",
@@ -44,8 +37,8 @@ max_plot <- brca_gene_summary %>%
 
 ggsave(filename = "max_violin.png", plot = max_plot)
 
-# Visualize brca gene expression distribution per sample
-density_plot <- brca_long %>%
+# Visualize tcga gene expression distribution per sample
+density_plot <- tcga_long %>%
   ggplot(aes(x = log10(count + 1), color = sample)) +
   geom_density(alpha = 0.5) +
   # scale_x_log10() +
@@ -61,16 +54,16 @@ ggsave(filename = "density_plot.png", plot = density_plot)
 
 ## filter genes that are expressed lower than a threshhold across all samples 
 # Set a threshold, e.g., > 100
-filtered_genes <- brca_gene_summary %>%
-  filter(MaxExpression > 100)
+filtered_genes <- tcga_gene_summary %>%
+  filter(MaxExpression > 13)
 
 # Subset the original data to keep only the filtered genes
-filtered_brca_long <- brca_long %>%
-  filter(gene %in% filtered_genes$gene)
+filtered_tcga_long <- tcga_long %>%
+  filter(transcript %in% filtered_genes$gene)
 
 # Check dimensions of the filtered data
-dim(brca_long)
-dim(filtered_brca_long)
+dim(tcga_long)
+dim(filtered_tcga_long)
 
 
 
@@ -84,13 +77,13 @@ pivot <- function(matrix){
   return(matrix)
 }
 
-filtered_brca_wide <- pivot(filtered_brca_long)
+filtered_tcga_wide <- pivot(filtered_tcga_long)
 gtex_wide <- pivot(gtex_long)
 
 # inner join cancer and control datasets
 counts_matrix <- inner_join(gtex_wide, 
-                            filtered_brca_wide, 
-                            suffix = c("_gtex", "_brca"))
+                            filtered_tcga_wide, 
+                            suffix = c("_gtex", "_tcga"))
 
 # Create design data table
 disease <- counts_matrix |> 
