@@ -2,18 +2,67 @@
 library(tidyverse)
 library(here)
 
+
+harmonizeGtex <- function(gtex_tpm_path, gtex_count_path) {
+  tpm_harmon_out <- "data/processed/GTEX_tpm_harmonized.tsv.gz"
+  count_harmon_out <- "data/processed/GTEX_counts_harmonized.tsv.gz"
+  if (file.exists(here(tpm_harmon_out)) && file.exists(here(count_harmon_out))) {
+    return()
+  }
+  
+  gtex_tpm <- read_tsv(gtex_tpm_path) |>
+    mutate(transcript = str_remove(sample, "\\.\\d+"),
+           .before = sample) |>
+    select(-sample)
+  
+  gtex_count <- read_tsv(gtex_count_path) |>
+    mutate(transcript = str_remove(transcript_id, "\\.\\d+"),
+           .before = gene_id) |>
+    select(-c(transcript_id, gene_id))
+  
+  count_transcripts <- gtex_count |>
+    pull(transcript)
+  
+  count_samples <- gtex_count |>
+    colnames()
+  
+  # Write new tpm based on counts data
+  gtex_tpm |>
+    select(any_of(count_samples)) |>
+    filter(transcript %in% count_transcripts) |>
+    rename(sample = transcript) |>
+    write_tsv(here(tpm_harmon_out))
+
+  
+  # Get tpm transcripts and samples
+  tpm_transcripts <- gtex_tpm |>
+    pull(transcript)
+  
+  tpm_samples <- gtex_tpm  |>
+    colnames()
+  
+  # Write new counts based on tpms data
+  gtex_count |>
+    select(any_of(tpm_samples)) |>
+    filter(transcript %in% tpm_transcripts) |>
+    rename(sample = transcript) |>
+    write_tsv(here(counts_harmon_out))
+  
+  return()
+}
+
 # Funtion reads tsv tpm file, get a input tpm_limit threshold, and 
 # nonTargetFilter for a threshold.
 filterHealthyExpressed <- function(GtexTPM, TranscriptSubset, TPM_limit, nonTargetFilter) {
   # Read in GTEx
-  gtex = read_tsv(GtexTPM) |>
+  gtex_tpm = read_tsv(GtexTPM) |>
     janitor::clean_names() |>
     mutate(transcript = str_remove(sample, "\\.\\d+"),
            .before = sample) |>
     select(-sample)
   
   # Subset GTEx
-  gtex_subset <- gtex |>
+  gtex_subset <- gtex_tpm |>
     filter(transcript %in% TranscriptSubset)
   
   # Filtering pipeline 
@@ -64,15 +113,7 @@ filterDeeplocRowsums <- function(min_count_sum = 10) {
 
 subsetExpressionData <- function(transcript_subset, expression_data_path, out_path) {
   expression_data <- read_tsv(expression_data_path) |>
-    janitor::clean_names()
-  
-  if ("gene_id" %in% colnames(expression_data)) {
-    expression_data <- expression_data |>
-      select(-gene_id) |>
-      rename(sample = transcript_id)
-  }
-  
-  expression_data <- expression_data |>
+    janitor::clean_names() |>
     mutate(transcript = str_remove(sample, "\\.\\d+"),
            .before = sample) |>
     select(-sample)
@@ -83,20 +124,21 @@ subsetExpressionData <- function(transcript_subset, expression_data_path, out_pa
     
 }
 
+# Harmonize shit Gtex datasets
+harmonizeGtex(here("data/raw/filtered_tpm_GTEx.gz"), here("data/raw/filtered_counts_GTEx.gz"))
+
 # Filter tcga based on deeploc subcellular location on membrane and row sums of transcript counts > 10
 deeploc_rowsums_transcript <- filterDeeplocRowsums()
 
 
 # Filter gtex based on earlier filter and expression levels in healthy populations
-final_transcripts <- filterHealthyExpressed(GtexTPM = "data/raw/filtered_tpm_GTEx.gz",
+final_transcripts <- filterHealthyExpressed(GtexTPM = "data/processed/GTEx_tpm_harmonized.tsv.gz",
                                             TranscriptSubset = deeploc_rowsums_transcript, 
                                             TPM_limit = 1,
                                             nonTargetFilter = 0.20)
 
-subsetExpressionData(final_transcripts, here("data/raw/filtered_tpm_GTEx.gz"), here("data/processed/GTEx_preprocessed_tpm.rds"))
-subsetExpressionData(final_transcripts, here("data/raw/filtered_counts_GTEx.gz"), here("data/processed/GTEx_preprocessed_counts.rds"))
-subsetExpressionData(final_transcripts, here("data/raw/filtered_tpm_TCGA.gz"), here("data/processed/TCGA_preprocessed_tpm.rds"))
-subsetExpressionData(final_transcripts, here("data/raw/filtered_counts_TCGA.gz"), here("data/processed/TCGA_preprocessed_counts.rds"))
-
-read_rds(here("data/processed/GTExpreprocessed_tpm.rds"))
+subsetExpressionData(final_transcripts, here("data/processed/GTEx_tpm_harmonized.tsv.gz"),    here("data/processed/GTEx_tpm_preprocessed.rds"))
+subsetExpressionData(final_transcripts, here("data/processed/GTEx_counts_harmonized.tsv.gz"), here("data/processed/GTEx_counts_preprocessed.rds"))
+subsetExpressionData(final_transcripts, here("data/raw/filtered_tpm_TCGA.gz"),                here("data/processed/TCGA_tpm_preprocessed.rds"))
+subsetExpressionData(final_transcripts, here("data/raw/filtered_counts_TCGA.gz"),             here("data/processed/TCGA_counts_preprocessed.rds"))
 
