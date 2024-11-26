@@ -54,7 +54,7 @@ tidy_read_gff3 <- function(file_path) {
   for (line in lines) {
     
     # Check for comment lines with protein information
-    if (grepl("^# sp_", line)) {
+    if (grepl("^# ENST", line)) {
       if (grepl("Length:", line)) {
         # Extract protein ID and length
         protein_id <- sub("^# (\\S+).*", "\\1", line)
@@ -65,7 +65,7 @@ tidy_read_gff3 <- function(file_path) {
         predicted_tmrs <- as.numeric(sub(".*Number of predicted TMRs: (\\d+)", "\\1", line))
       }
       
-    } else if (grepl("^sp_", line)) {
+    } else if (grepl("^ENST", line)) {
       # Parse feature line
       fields <- strsplit(line, "\\s+")[[1]]
       feature_type <- fields[2]
@@ -89,8 +89,6 @@ tidy_read_gff3 <- function(file_path) {
       predicted_tmrs <- NULL
     }
   }
-  
-  
   
   # Combine all individual data frames in the list into one
   parsed_data <- do.call(rbind, data_list)
