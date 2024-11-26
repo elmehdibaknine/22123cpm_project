@@ -1,18 +1,18 @@
 ## For retrieving aa sequences from ENSTs
 get_aa_seqs_from_ENSTs <- function(transcript_ids, batch_size = 100, seqType = "peptide") {
   # Get human ensembl mart
-  cat("Creating human mart from biomaRt::useMart with hsapiens_gene_ensembl \n")
+  message("Creating human mart from biomaRt::useMart with hsapiens_gene_ensembl \n")
   ensembl_hsap <- biomaRt::useMart("ensembl", dataset = "hsapiens_gene_ensembl")
   
   # Initialize an empty tibble to store results
-  results <- tibble()
+  results <- tibble::tibble()
   
   # Split transcript IDs into batches
   id_batches <- split(transcript_ids, ceiling(seq_along(transcript_ids) / batch_size))
   
   # Loop over each batch
   for (i in seq_along(id_batches)) {
-    cat("Processing batch", i, "of", length(id_batches), "\n")
+    message("Processing batch", i, "of", length(id_batches), "\n")
     
     # Query the current batch
     batch_result <- biomaRt::getSequence(
@@ -28,10 +28,19 @@ get_aa_seqs_from_ENSTs <- function(transcript_ids, batch_size = 100, seqType = "
   return(results)
 }
 
-seqs |> head(2) |> pull(peptide)
+## For writing fastas
+write_fasta_from_named_list <- function(sequences, file_name) {
+  # Create a named DNAStringSet or AAStringSet object
+  seq_set <- Biostrings::AAStringSet(sequences)
+  
+  # Write the DNAStringSet object to a FASTA file
+  Biostrings::writeXStringSet(seq_set, filepath = file_name)
+  
+  message("FASTA file written to: ", file_name)
+}
 
-# For reading gff3 output from deepTMHMM
-read_gff3 <- function(file_path) {
+### For reading gff3 output from deepTMHMM
+tidy_read_gff3 <- function(file_path) {
   # Read the file
   lines <- readLines(file_path)
   
@@ -45,7 +54,7 @@ read_gff3 <- function(file_path) {
   for (line in lines) {
     
     # Check for comment lines with protein information
-    if (grepl("^# sp_", line)) {
+    if (grepl("^# ENST", line)) {
       if (grepl("Length:", line)) {
         # Extract protein ID and length
         protein_id <- sub("^# (\\S+).*", "\\1", line)
@@ -56,7 +65,7 @@ read_gff3 <- function(file_path) {
         predicted_tmrs <- as.numeric(sub(".*Number of predicted TMRs: (\\d+)", "\\1", line))
       }
       
-    } else if (grepl("^sp_", line)) {
+    } else if (grepl("^ENST", line)) {
       # Parse feature line
       fields <- strsplit(line, "\\s+")[[1]]
       feature_type <- fields[2]
@@ -81,18 +90,8 @@ read_gff3 <- function(file_path) {
     }
   }
   
-  
-  
   # Combine all individual data frames in the list into one
   parsed_data <- do.call(rbind, data_list)
   
   return (parsed_data)
 }
-
-
-all_projects  <-recount3::available_projects()
-all_projects |>
-  as_tibble() |>
-  filter(project_home == "data_sources/tcga") |>
-  filter()
-  distinct(project_home)
