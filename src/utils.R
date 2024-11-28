@@ -2,7 +2,8 @@
 get_aa_seqs_from_ENSTs <- function(transcript_ids, batch_size = 100, seqType = "peptide") {
   # Get human ensembl mart
   message("Creating human mart from biomaRt::useMart with hsapiens_gene_ensembl \n")
-  ensembl_hsap <- biomaRt::useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  ensembl_hsap <- biomaRt::useEnsembl("ensembl", 
+                                      dataset = "hsapiens_gene_ensembl")
   
   # Initialize an empty tibble to store results
   results <- tibble::tibble()
