@@ -163,4 +163,4 @@ top_100 <- res_tidy |>
   arrange(desc(metric)) |> 
   head(n = 100) |> 
   select(row)
-write_rds(x = top_100, file = "upregulated_transcripts.rds")
+write_tsv(x = top_100, file = "upregulated_transcripts.tsv")
