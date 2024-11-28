@@ -11,13 +11,17 @@ library(DESeq2)
 library(here)
 
 # load data
-tcga_counts <- read_rds(here("data/processed/TCGA_counts_preprocessed.rds"))
-gtex_counts <- read_rds(here("data/processed/GTEx_counts_preprocessed.rds"))
+# tcga_counts <- read_rds(here("data/processed/TCGA_counts_preprocessed.rds"))
+# gtex_counts <- read_rds(here("data/processed/GTEx_counts_preprocessed.rds"))
+
+tcga_counts <- read_tsv(here("data/processed/tcga_counts_preprocessed.tsv"))
+gtex_counts <- read_tsv(here("data/processed/gtex_counts_preprocessed.tsv"))
+
+                        
 
 #### IF NEEDED ####
 # Assume `data` is your matrix with genes as rows and samples as columns
 tcga_long <- tcga_counts %>%
-  select(-x1214) |> 
   pivot_longer(-transcript, names_to = "sample", values_to = "count")
 
 # Summarize maximum expression for each gene
@@ -28,9 +32,9 @@ tcga_gene_summary <- tcga_long %>%
 
 # Visualize maximum gene value across sample distribution
 max_plot <- tcga_gene_summary %>%
-  ggplot(aes(x = "", y = MaxExpression)) +
+  ggplot(aes(x = "", y = log10(MaxExpression +1))) +
   geom_violin(fill = "blue", alpha = 0.5) +
-  geom_hline(yintercept = 13) +
+  geom_hline(yintercept = log10(10)) +
   # geom_jitter(width = 0.2, alpha = 0.5, color = "black") +  # Add jittered points
   theme_minimal() +
   labs(title = "Violin Plot of Max Gene Counts with Points",
@@ -57,7 +61,7 @@ ggsave(filename = "density_plot.png", plot = density_plot)
 ## filter genes that are expressed lower than a threshhold across all samples 
 # Set a threshold, e.g., > 5
 filtered_genes <- tcga_gene_summary %>%
-  filter(MaxExpression > 5)
+  filter(MaxExpression > 10)
 
 # Subset the original data to keep only the filtered genes
 filtered_tcga_long <- tcga_long %>%
