@@ -5,9 +5,6 @@ library(here)
 options(readr.show_progress = FALSE, readr.show_col_types = FALSE)
 
 revertToCounts <- function(log2CountData_path, out_path) {
-  if (file.exists(out_path)) {
-    return()
-  }
   
   log2countdata <- read_tsv(log2CountData_path)
   
@@ -16,16 +13,14 @@ revertToCounts <- function(log2CountData_path, out_path) {
       where(is.numeric), 
       ~ 2^(.x) - 1
     )) |>
-    mutate(across(where(is.numeric), ~ ifelse(. < 0, 0, .)))
+    mutate(across(where(is.numeric), ~ ifelse(. < 0, 0, .))) |>
+    mutate(across(where(is.numeric), round))
   
   countdata |>
     write_tsv(out_path)
 }
 
 revertToTPM <- function(log2TPMData_path, out_path) {
-  if (file.exists(out_path)) {
-    return()
-  }
   
   log2TPMdata <- read_tsv(log2TPMData_path)
   
@@ -40,22 +35,33 @@ revertToTPM <- function(log2TPMData_path, out_path) {
     write_tsv(out_path)
 }
 
-filterRowsums <- function(TCGA_counts_path, min_count_sum = 10) {
-  # Load TCGA
+filterRowsums <- function(TCGA_counts_path, GTEX_counts_path, min_count_sum = 10) {
+  # Load Counts
   tcga_counts <- read_tsv(file = TCGA_counts_path) |>
     janitor::clean_names() |>
     rename(transcript = sample)
   
-  ### Removing rows with column sum below 10
+  gtex_counts <- read_tsv(file = GTEX_counts_path) |>
+    janitor::clean_names() |>
+    rename(transcript = sample)
+  
+  ### Removing rows with column sum below threshold
   tcga_counts_subset_rowsums <- tcga_counts %>%
     filter(rowSums(select(., where(is.numeric))) >= min_count_sum)
   
-  ### Writing file to disk
-  transcript_list_filtered <- tcga_counts_subset_rowsums |>
-    select(transcript) |>
-    pull()
+  gtex_counts_subset_rowsums <- gtex_counts %>%
+    filter(rowSums(select(., where(is.numeric))) >= min_count_sum)
   
-  return(transcript_list_filtered)
+  ### Get transcripts from tcga and gtex
+  tcga_transcript_filtered <- tcga_counts_subset_rowsums |>
+    pull(transcript)
+  
+  gtex_transcript_filtered <- gtex_counts_subset_rowsums |>
+    pull(transcript)
+  
+  in_common_transcript_filtered <- intersect(tcga_transcript_filtered, gtex_transcript_filtered)
+  
+  return(in_common_transcript_filtered)
   
 }
 
@@ -86,9 +92,6 @@ filterHealthyExpressed <- function(GtexTPM, TranscriptSubset, TPMLimit, nonTarge
 }
 
 subsetExpressionData <- function(transcript_subset, expression_data_path, out_path) {
-  if (file.exists(out_path)) {
-    return()
-  }
   expression_data <- read_tsv(expression_data_path) |>
     janitor::clean_names() |>
     rename(transcript = sample)
@@ -129,8 +132,8 @@ revertToTPM(tcga_tpm_raw, tcga_tpm_corrected)
 revertToCounts(gtex_counts_raw, gtex_counts_corrected)
 revertToCounts(tcga_counts_raw, tcga_counts_corrected)
 
-# Filter tcga based on deeploc subcellular location on membrane and row sums of transcript counts > 10
-rowsums_transcript <- filterRowsums(tcga_counts_corrected)
+# Filter tcga based on row sums of transcript counts > 10
+rowsums_transcript <- filterRowsums(tcga_counts_corrected, gtex_counts_corrected)
 
 
 # Filter gtex based on earlier filter and expression levels in healthy populations
@@ -146,3 +149,4 @@ subsetExpressionData(final_transcripts, gtex_tpm_corrected,   gtex_tpm_processed
 # Write TCGA
 subsetExpressionData(final_transcripts, tcga_counts_corrected, tcga_counts_processed)
 subsetExpressionData(final_transcripts, tcga_tpm_corrected, tcga_tpm_processed)
+  
