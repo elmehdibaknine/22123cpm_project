@@ -11,13 +11,16 @@ library(DESeq2)
 library(here)
 
 # load data
-tcga_counts <- read_rds(here("data/processed/TCGA_counts_preprocessed.rds"))
-gtex_counts <- read_rds(here("data/processed/GTEx_counts_preprocessed.rds"))
+# tcga_counts <- read_rds(here("data/processed/TCGA_counts_preprocessed.rds"))
+# gtex_counts <- read_rds(here("data/processed/GTEx_counts_preprocessed.rds"))
+
+tcga_counts <- read_tsv(here("data/processed/tcga_counts_preprocessed.tsv"))
+gtex_counts <- read_tsv(here("data/processed/gtex_counts_preprocessed.tsv"))
+
 
 #### IF NEEDED ####
 # Assume `data` is your matrix with genes as rows and samples as columns
 tcga_long <- tcga_counts %>%
-  select(-x1214) |> 
   pivot_longer(-transcript, names_to = "sample", values_to = "count")
 
 # Summarize maximum expression for each gene
@@ -28,9 +31,9 @@ tcga_gene_summary <- tcga_long %>%
 
 # Visualize maximum gene value across sample distribution
 max_plot <- tcga_gene_summary %>%
-  ggplot(aes(x = "", y = MaxExpression)) +
+  ggplot(aes(x = "", y = log10(MaxExpression +1))) +
   geom_violin(fill = "blue", alpha = 0.5) +
-  geom_hline(yintercept = 13) +
+  geom_hline(yintercept = log10(10)) +
   # geom_jitter(width = 0.2, alpha = 0.5, color = "black") +  # Add jittered points
   theme_minimal() +
   labs(title = "Violin Plot of Max Gene Counts with Points",
@@ -57,7 +60,7 @@ ggsave(filename = "density_plot.png", plot = density_plot)
 ## filter genes that are expressed lower than a threshhold across all samples 
 # Set a threshold, e.g., > 5
 filtered_genes <- tcga_gene_summary %>%
-  filter(MaxExpression > 5)
+  filter(MaxExpression > 10)
 
 # Subset the original data to keep only the filtered genes
 filtered_tcga_long <- tcga_long %>%
@@ -112,24 +115,52 @@ dds <- DESeqDataSetFromMatrix(countData = counts_matrix,
 
 ## Run DESeq2 on the DESeq data set and look at the results (this make take few minutes, so go and get a coffee)
 dds <- DESeq(dds)
-res <- results(dds)
-
-## Convert the results to a data frame and add a column indicating if the results is significant or not
-res_df <- res |>
-  as_tibble(rownames = "transcript") |> 
-  mutate(significant = padj < 0.05)
-
-## Create a volcano plot with ggplot (optional: play around here a bit with colors and themes to improve the readability of your plot)
-volcano_plot <- ggplot(res_df, 
-       mapping = aes(x = log2FoldChange, 
-                     y = -log10(padj), 
-                     color = significant)) +
-  geom_point() +
-  scale_color_manual(values = c("grey", "red")) +
-  labs(x = "Log2 Fold Change", 
-       y = "-Log10 Adjusted P-value", 
-       title = "Volcano Plot") + 
-  theme_minimal()
+## Convert to tidy dataframe
+res_tidy <- results(dds, tidy = TRUE)
 
 
-ggsave(filename = "volcano_plot.png", plot = volcano_plot)
+# Define thresholds
+padj_threshold <- 0.05  # Adjusted p-value threshold
+log2fc_threshold <- 1   # Log2 fold change threshold
+
+# Add a new column for color coding
+tidy_deseq_results <- res_tidy %>%
+  mutate(
+    regulation = case_when(
+      padj < padj_threshold & log2FoldChange > log2fc_threshold ~ "Up-regulated",
+      padj < padj_threshold & log2FoldChange < -log2fc_threshold ~ "Down-regulated",
+      TRUE ~ "Not significant"
+    )
+  )
+
+# Create the volcano plot
+volcano <- ggplot(tidy_deseq_results, aes(x = log2FoldChange, y = -log10(padj), color = regulation)) +
+  geom_point(alpha = 0.8, size = 2) +  
+  scale_color_manual(values = c(
+    "Up-regulated" = "#F8766D",
+    "Down-regulated" = "#619CFF",
+    "Not significant" = "gray"
+  )) +
+  labs(
+    title = "Volcano Plot",
+    x = "Log2 Fold Change",
+    y = "-log10 Adjusted p-value",
+    color = "Regulation"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    text = element_text(size = 12)
+  )
+
+
+ggsave(filename = "volcano.png", plot = volcano)
+
+
+# Extract top 100 
+top_100 <- res_tidy |> 
+  mutate(metric = -log10(padj) * log2FoldChange) |> 
+  arrange(desc(metric)) |> 
+  head(n = 100) |> 
+  select(row)
+write_tsv(x = top_100, file = "upregulated_transcripts.tsv")
