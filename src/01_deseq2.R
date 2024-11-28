@@ -10,10 +10,7 @@ library(tidyverse)
 library(DESeq2)
 library(here)
 
-# load data
-# tcga_counts <- read_rds(here("data/processed/TCGA_counts_preprocessed.rds"))
-# gtex_counts <- read_rds(here("data/processed/GTEx_counts_preprocessed.rds"))
-
+# Load counts data
 tcga_counts <- read_tsv(here("data/processed/tcga_counts_preprocessed.tsv"))
 gtex_counts <- read_tsv(here("data/processed/gtex_counts_preprocessed.tsv"))
 
@@ -157,10 +154,48 @@ volcano <- ggplot(tidy_deseq_results, aes(x = log2FoldChange, y = -log10(padj), 
 ggsave(filename = "volcano.png", plot = volcano)
 
 
-# Extract top 100 
-top_100 <- res_tidy |> 
+# Extract top 100
+top_transcripts <- res_tidy |> 
+  dplyr::rename(transcript = row) |>
   mutate(metric = -log10(padj) * log2FoldChange) |> 
-  arrange(desc(metric)) |> 
-  head(n = 100) |> 
-  select(row)
-write_tsv(x = top_100, file = "upregulated_transcripts.tsv")
+  arrange(desc(metric)) |>
+  head(n = 100) |>
+  select(transcript)
+
+top_transcripts |>
+  write_tsv(file = here("data/processed/top_upregulated_transcripts.tsv"))
+
+
+## plot labeled volcano plot
+# Add a new column for color coding
+tidy_deseq_results <- tidy_deseq_results %>%
+  mutate(
+    labeling = regulation,
+    labeling = if_else(labeling == "Up-regulated" & row %in% top_transcripts$transcript, 
+                       "TopUp-regulated", 
+                       labeling)
+  )
+
+# Create the volcano plot
+volcano <- ggplot(tidy_deseq_results, aes(x = log2FoldChange, y = -log10(padj), color = labeling)) +
+  geom_point(alpha = 0.8, size = 2) +  
+  scale_color_manual(values = c(
+    "Up-regulated" = "#F8766D",
+    "TopUp-regulated" = "green",
+    "Down-regulated" = "#619CFF",
+    "Not significant" = "gray"
+  )) +
+  labs(
+    title = "Volcano Plot",
+    x = "Log2 Fold Change",
+    y = "-log10 Adjusted p-value",
+    color = "Regulation"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    text = element_text(size = 12)
+  )
+
+
+ggsave(filename = "volcano_labeled.png", plot = volcano)
