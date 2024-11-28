@@ -137,14 +137,4 @@ expr_difference_p <- pair_data |>
       strip.text = element_text(size = 12)
     )
 
-expr_difference_p
-
-TCGA_correlation_matrix |>
-  as_tibble(rownames = "transcript") |>
-  select(transcript, pair1) |>
-  filter(transcript == pair2)
-
-GTEx_correlation_matrix |>
-  as_tibble(rownames = "transcript") |>
-  select(transcript, pair1) |>
-  filter(transcript == pair2)
+ggsave(here("bispecific_target_plot.png"), expr_difference_p)

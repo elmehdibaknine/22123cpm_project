@@ -25,7 +25,7 @@ transcript_above_threshold <- deeptmhmm_tidy_above_threshold |>
   pull(transcript)
 
 # Plot selected transcripts predicted topology features
-deeptmhmm_tidy |>
+ectodomains_plot <- deeptmhmm_tidy |>
   filter(transcript %in% transcript_above_threshold[1:9]) |>
   ggplot(aes(xmin = start, xmax = end, ymin = 0, ymax = 1, fill = feature_type)) +
   geom_rect() +
@@ -40,3 +40,6 @@ deeptmhmm_tidy |>
   ) +
   labs(x = "Position", y = NULL, fill = "Feature Type") +
   ggtitle("Protein Feature Types by Transcript")
+
+
+ggsave(here("protein_topology.png"), ectodomains_plot)
