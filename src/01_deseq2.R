@@ -115,31 +115,52 @@ dds <- DESeqDataSetFromMatrix(countData = counts_matrix,
 
 ## Run DESeq2 on the DESeq data set and look at the results (this make take few minutes, so go and get a coffee)
 dds <- DESeq(dds)
-res <- results(dds)
-
-## Convert the results to a data frame and add a column indicating if the results is significant or not
-res_df <- res |>
-  as_tibble(rownames = "transcript") |> 
-  mutate(significant = padj < 0.05)
-
-## Create a volcano plot with ggplot (optional: play around here a bit with colors and themes to improve the readability of your plot)
-volcano_plot <- ggplot(res_df, 
-       mapping = aes(x = log2FoldChange, 
-                     y = -log10(padj), 
-                     color = significant)) +
-  geom_point() +
-  scale_color_manual(values = c("grey", "red")) +
-  labs(x = "Log2 Fold Change", 
-       y = "-Log10 Adjusted P-value", 
-       title = "Volcano Plot") + 
-  theme_minimal()
+## Convert to tidy dataframe
+res_tidy <- results(dds, tidy = TRUE)
 
 
-ggsave(filename = "volcano_plot.png", plot = volcano_plot)
+# Define thresholds
+padj_threshold <- 0.05  # Adjusted p-value threshold
+log2fc_threshold <- 1   # Log2 fold change threshold
+
+# Add a new column for color coding
+tidy_deseq_results <- res_tidy %>%
+  mutate(
+    regulation = case_when(
+      padj < padj_threshold & log2FoldChange > log2fc_threshold ~ "Up-regulated",
+      padj < padj_threshold & log2FoldChange < -log2fc_threshold ~ "Down-regulated",
+      TRUE ~ "Not significant"
+    )
+  )
+
+# Create the volcano plot
+volcano <- ggplot(tidy_deseq_results, aes(x = log2FoldChange, y = -log10(padj), color = regulation)) +
+  geom_point(alpha = 0.8, size = 2) +  
+  scale_color_manual(values = c(
+    "Up-regulated" = "#F8766D",
+    "Down-regulated" = "#619CFF",
+    "Not significant" = "gray"
+  )) +
+  labs(
+    title = "Volcano Plot",
+    x = "Log2 Fold Change",
+    y = "-log10 Adjusted p-value",
+    color = "Regulation"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    text = element_text(size = 12)
+  )
+
+
+ggsave(filename = "volcano.png", plot = volcano)
+
 
 # Extract top 100 
-top_100 <- res_df |> 
-  mutate(metric = -log10(padj + 0.000000001) * log2FoldChange) |> 
+top_100 <- res_tidy |> 
+  mutate(metric = -log10(padj) * log2FoldChange) |> 
   arrange(desc(metric)) |> 
-  head(n = 100)
+  head(n = 100) |> 
+  select(row)
 write_rds(x = top_100, file = "upregulated_transcripts.rds")
