@@ -4,15 +4,12 @@ library(gplots)
 library(RColorBrewer)
 library(viridis)
 
-bispecific_correlation_matrix <- function(path_to_TPM_preprocessed, path_to_subset){
+bispecific_correlation_matrix <- function(path_to_TPM_preprocessed){
   
   dds_top_transcripts <- read_tsv(path_to_TPM_preprocessed)
-  most_upregulated_transcripts <- read_tsv(path_to_subset)
-  
+
   matrix_for_correlation <- dds_top_transcripts |> 
     slice_sample(n = 100) |> # remove when running actual analysis and not just samples
-    inner_join(most_upregulated_transcripts,
-               by = c("transcript" = "transcript")) |> 
     column_to_rownames("transcript") |> 
     t()
   
@@ -59,16 +56,15 @@ heatmap.2(correlation_matrix,
 # Top 10 pairs of CAR's
 correlation_df <- as.data.frame(as.table(correlation_matrix)) |> 
   filter(Var1 != Var2) |>             # Remove self-correlations
-  mutate(Var1 = pmin(as.character(Var1), 
-                     as.character(Var2)),
-         Var2 = pmax(as.character(Var1), 
-                     as.character(Var2))) |>  # Ensure unique pairs by sorting Var1 and Var2
-  distinct(Var1, 
-           Var2, 
-           .keep_all = TRUE) |>   # Remove duplicates (Var2, Var1)
-  filter(Freq > 0) |> 
-  arrange(desc(abs(Freq))) |>            # Sort by absolute correlation
-  slice_head(n = 10)  
+  mutate(pair = map2_chr(Var1, 
+                         Var2, 
+                         ~paste(sort(c(.x, .y)), 
+                                collapse = "-"))) |>  # Create unique pairs
+  distinct(pair, .keep_all = TRUE) |>  # Remove duplicates based on unique pairs
+  filter(Freq > 0) |>                  # Keep only positive correlations
+  arrange(desc(Freq)) |>               # Sort by correlation value (not absolute)
+  slice_head(n = 10) |>                # Select the top 10 correlations
+  select(!pair)
 
 # Plots TCGA vs GTEx
 GTEX_TPM_data <- read_tsv("data/processed/gtex_tpm_preprocessed.tsv")
