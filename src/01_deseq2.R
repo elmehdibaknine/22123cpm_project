@@ -17,7 +17,6 @@ library(here)
 tcga_counts <- read_tsv(here("data/processed/tcga_counts_preprocessed.tsv"))
 gtex_counts <- read_tsv(here("data/processed/gtex_counts_preprocessed.tsv"))
 
-                        
 
 #### IF NEEDED ####
 # Assume `data` is your matrix with genes as rows and samples as columns
@@ -137,3 +136,10 @@ volcano_plot <- ggplot(res_df,
 
 
 ggsave(filename = "volcano_plot.png", plot = volcano_plot)
+
+# Extract top 100 
+top_100 <- res_df |> 
+  mutate(metric = -log10(padj + 0.000000001) * log2FoldChange) |> 
+  arrange(desc(metric)) |> 
+  head(n = 100)
+write_rds(x = top_100, file = "upregulated_transcripts.rds")
