@@ -1,6 +1,7 @@
 # Load libraries
 library(tidyverse)
 library(here)
+library(janitor)
 
 options(readr.show_progress = FALSE, readr.show_col_types = FALSE)
 
@@ -35,7 +36,7 @@ revertToTPM <- function(log2TPMData_path, out_path) {
     write_tsv(out_path)
 }
 
-filterRowsums <- function(TCGA_counts_path, GTEX_counts_path, min_count_sum = 10) {
+filterRowsums <- function(TCGA_counts_path, GTEX_counts_path, min_count_sum = 100) {
   # Load Counts
   tcga_counts <- read_tsv(file = TCGA_counts_path) |>
     janitor::clean_names() |>
@@ -52,11 +53,29 @@ filterRowsums <- function(TCGA_counts_path, GTEX_counts_path, min_count_sum = 10
   gtex_counts_subset_rowsums <- gtex_counts %>%
     filter(rowSums(select(., where(is.numeric))) >= min_count_sum)
   
+  # Filter percentage of samples above 0
+  percentage_above_0_threshold = 0.50
+  tcga_counts_subset_filtered <- tcga_counts_subset_rowsums %>%
+    mutate(percent_above_0 = 
+             rowMeans(select(., where(is.numeric)) > 0)
+    ) |>
+      filter(percent_above_0 > percentage_above_0_threshold) |>
+      select(-percent_above_0) |>
+      select(transcript, everything())
+  
+  gtex_counts_subset_filtered <- gtex_counts_subset_rowsums %>%
+    mutate(percent_above_0 = 
+             rowMeans(select(., where(is.numeric)) > 0)
+    ) |>
+    filter(percent_above_0 > percentage_above_0_threshold) |>
+    select(-percent_above_0) |>
+    select(transcript, everything())
+  
   ### Get transcripts from tcga and gtex
-  tcga_transcript_filtered <- tcga_counts_subset_rowsums |>
+  tcga_transcript_filtered <- tcga_counts_subset_filtered |>
     pull(transcript)
   
-  gtex_transcript_filtered <- gtex_counts_subset_rowsums |>
+  gtex_transcript_filtered <- gtex_counts_subset_filtered |>
     pull(transcript)
   
   in_common_transcript_filtered <- intersect(tcga_transcript_filtered, gtex_transcript_filtered)
