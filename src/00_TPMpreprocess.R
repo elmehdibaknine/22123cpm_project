@@ -139,7 +139,7 @@ rowsums_transcript <- filterRowsums(tcga_counts_corrected, gtex_counts_corrected
 # Filter gtex based on earlier filter and expression levels in healthy populations
 final_transcripts <- filterHealthyExpressed(GtexTPM = gtex_tpm_corrected,
                                             TranscriptSubset = rowsums_transcript, 
-                                            TPMLimit = 1,
+                                            TPMLimit = 0.25,
                                             nonTargetFilter = 0.20)
 
 # Write gtex
@@ -149,4 +149,5 @@ subsetExpressionData(final_transcripts, gtex_tpm_corrected,   gtex_tpm_processed
 # Write TCGA
 subsetExpressionData(final_transcripts, tcga_counts_corrected, tcga_counts_processed)
 subsetExpressionData(final_transcripts, tcga_tpm_corrected, tcga_tpm_processed)
-  
+
+gtex_c <- read_tsv(gtex_counts_processed)
