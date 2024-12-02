@@ -26,10 +26,12 @@ transcript_above_threshold <- deeptmhmm_tidy_above_threshold |>
 # Plot selected transcripts predicted topology features
 deeptmhmm_tidy |>
   filter(protein_id %in% transcript_above_threshold[1:9]) |>
+  mutate(feature_type = factor(feature_type, levels = c("signal", "outside", "TMhelix", "inside"))) |>
   ggplot(aes(xmin = start, xmax = end, ymin = 0, ymax = 1, fill = feature_type)) +
   geom_rect() +
   facet_wrap(~ protein_id, scales = "free_y") +   # Facet by transcript (protein_id)
-  scale_fill_manual(values = c("signal" = "orange", "outside" = "green", "TMhelix" = "darkgrey", "inside" = "red")) + # Customize colors
+  scale_fill_manual(values = c("signal" = "#619CFF", "outside" = "#00BA38",
+                               "TMhelix" = "darkgrey", "inside" = "#F8766D")) + # Customize colors
   theme_minimal() +
   theme(
     axis.text.y = element_blank(), # Hide y-axis text (only horizontal bars)
@@ -39,3 +41,5 @@ deeptmhmm_tidy |>
   ) +
   labs(x = "Position", y = NULL, fill = "Feature Type") +
   ggtitle("Protein Feature Types by Transcript")
+
+ggsave(here("ectodomain_containing_transcripts.png"), width = 5, height = 3, dpi = 600)
