@@ -121,7 +121,10 @@ pair_data <- combined_tpm |>
 
 # Create the plot pair (TCGA vs GTEx expressions)
 expr_difference_p <- pair_data |>
-  ggplot(aes(x = interaction(transcript, data_source), y = log2(expr_tpm), fill = data_source)) +
+  mutate(data_source = factor(data_source, levels = c("tcga", "gtex"))) |>
+  ggplot(aes(x = interaction(transcript, data_source),
+             y = log2(expr_tpm),
+             fill = data_source)) +
     geom_boxplot() +
     facet_wrap(~ pair_group, scales = "free_x") +
     scale_fill_manual(values = c("gtex" = "blue", "tcga" = "red")) +
